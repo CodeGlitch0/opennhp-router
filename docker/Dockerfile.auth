@@ -1,0 +1,10 @@
+# Auth service. Installed client public keys only. Not NHP-Server.
+FROM python:3.12-slim
+
+COPY docker/entrypoint.py /entrypoint.py
+COPY opennhp_router /opt/opennhp_router/opennhp_router
+
+ENV PYTHONPATH=/opt/opennhp_router
+EXPOSE 8090
+
+ENTRYPOINT ["python3", "/entrypoint.py", "auth"]

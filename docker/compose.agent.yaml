@@ -1,0 +1,5 @@
+# Separate from docker/compose.yaml. Not started by the default stack.
+services:
+  agent:
+    image: opennhp-agent
+    # The image is the upstream agent. This project does not build a custom agent.

@@ -1,0 +1,66 @@
+# Default stack: NHP-AC (gateway), NHP-Server, and the auth service.
+# Relay is optional. Start it with: docker compose --profile relay up
+# The agent is not part of this file.
+
+services:
+  gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - gateway_keys:/var/lib/opennhp/gateway
+      - gateway_pub:/run/publish/gateway
+      - server_pub:/run/peers/server:ro
+      - ../router.toml:/etc/opennhp/router.toml:ro
+    depends_on:
+      - server
+      - auth
+
+  server:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.server
+    ports:
+      - "62206:62206/udp"
+    volumes:
+      - server_keys:/var/lib/opennhp/server
+      - server_pub:/run/publish/server
+      - gateway_pub:/run/peers/gateway:ro
+      - relay_pub:/run/peers/relay:ro
+      - ../router.toml:/etc/opennhp/router.toml:ro
+    depends_on:
+      - auth
+
+  auth:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.auth
+    volumes:
+      - auth_keys:/var/lib/opennhp/auth
+      - ../router.toml:/etc/opennhp/router.toml:ro
+
+  relay:
+    profiles:
+      - relay
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.relay
+    ports:
+      - "8080:8080"
+    volumes:
+      - relay_keys:/var/lib/opennhp/relay
+      - relay_pub:/run/publish/relay
+      - server_pub:/run/peers/server:ro
+    depends_on:
+      - server
+
+volumes:
+  gateway_keys:
+  server_keys:
+  auth_keys:
+  relay_keys:
+  gateway_pub:
+  server_pub:
+  relay_pub:

@@ -1,0 +1,17 @@
+# Operator settings. Nothing else is required.
+# Keys and peer addresses are generated. Do not paste them here.
+
+window_seconds = 60
+
+[[identities]]
+pubkey = "replace-with-client-public-key"
+
+[[resources]]
+name = "app"
+
+[[resources.forwards]]
+public_host = "gateway.example"
+public_port = 443
+backend_host = "10.0.0.10"
+backend_port = 8080
+protocol = "tcp"
