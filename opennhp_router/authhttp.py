@@ -10,7 +10,7 @@ import json
 from opennhp_router.identity import decision
 
 
-def serve(installed, host="0.0.0.0", port=8090):
+def serve(installed, host="127.0.0.1", port=8090):
     allowed = list(installed)
 
     class Handler(BaseHTTPRequestHandler):

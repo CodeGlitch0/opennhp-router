@@ -1,31 +1,33 @@
 """Render stock OpenNHP TOML from the operator file.
 
-ACK address and AC open address are the same upstream field. Confirmed in
-the pinned tree at endpoints/server/udpserver.go, handleNhpOpenResource:
-info.Addr is appended into acDstIpMap (the destination NHP-AC opens) and
-ackMsg.ResourceHost is info.DestHost(), which reads that same ResourceInfo
-(Hostname, else Addr.Ip, plus Addr.Port when PortSuffix is set). Advertise
-the public host and port there. Never the backend. The gateway forwarder
-dials the backend from a separate table.
+Hostname and Addr.Ip are different upstream fields. Confirmed in the
+pinned tree: nhp/common/nhpmsg.go DestHost prefers Hostname, else
+Addr.Ip. endpoints/server/udpserver.go handleNhpOpenResource opens
+info.Addr, and the ACK name is info.DestHost(). Hostname is the public
+host the client dials. Addr.Ip is the local IPv4 the packet filter sees
+as the destination. Never the backend, and never a DNS name in Addr.Ip.
+The gateway forwarder dials the backend from a separate table.
 """
 
 from opennhp_router.operator import OperatorConfig
 
 PLUGIN_RESOURCE = "server/plugins/authclient/etc/resource.toml"
 FORWARD_TABLE = "gateway/etc/forwards.toml"
-# Compose DNS name of the auth service. Not an operator setting.
-AUTH_URL = "http://auth:8090/authorize"
+# Auth listens on the host loopback. Compose DNS names do not resolve.
+AUTH_URL = "http://127.0.0.1:8090/authorize"
 ASP_ID = "authclient"
 AC_ID = "gateway"
 # Same far-future epoch the upstream samples use for peer ExpireTime.
 PEER_EXPIRE = 1924991999
 SERVER_LISTEN_PORT = 62206
+# Host network: every peer dials the local server. Not an operator address.
+PEER_HOST = "127.0.0.1"
 
 
-def render(config: OperatorConfig, peer_keys=None) -> dict[str, str]:
+def render(config: OperatorConfig, peer_keys=None, addresses=None) -> dict[str, str]:
     keys = peer_keys or {}
     files = {
-        PLUGIN_RESOURCE: _plugin_resource(config),
+        PLUGIN_RESOURCE: _plugin_resource(config, addresses),
         FORWARD_TABLE: _forward_table(config),
         "server/etc/config.toml": _server_config_toml(keys),
         "server/etc/agent.toml": _agent_toml(config),
@@ -111,10 +113,9 @@ def _pub(keys, role: str) -> str:
 
 
 def _peer_files(keys) -> dict[str, str]:
-    """NHP peer tables. Hosts are compose DNS names, never operator addresses.
+    """NHP peer tables. The dial host is 127.0.0.1, never an operator address.
 
-    auth is not an NHP UDP peer. The server plugin reaches it at AUTH_URL,
-    whose host is the compose DNS name "auth".
+    auth is not an NHP UDP peer. The server plugin reaches it at AUTH_URL.
     """
     server_pub = _pub(keys, "server")
     gateway_pub = _pub(keys, "gateway")
@@ -129,16 +130,16 @@ def _peer_files(keys) -> dict[str, str]:
 
 def _ac_server_toml(server_pub: str) -> str:
     return "\n".join([
-        "# NHP-AC upstream server. Compose DNS name, not an operator address.",
+        "# NHP-AC upstream server. Dial 127.0.0.1, not an operator address.",
         *_nhp_server_peer("server", server_pub),
     ])
 
 
 def _server_ac_toml(gateway_pub: str) -> str:
     return "\n".join([
-        "# NHP-Server AC peer. Compose DNS name gateway.",
+        "# NHP-Server AC peer. Hostname is the AC id label, not a dial address.",
         "# Auth HTTP is not an NHP peer; the plugin POSTs to",
-        f"# {AUTH_URL} (compose DNS \"auth\").",
+        f"# {AUTH_URL}.",
         "[[ACs]]",
         'Hostname = "gateway"',
         f'PubKeyBase64 = "{gateway_pub}"',
@@ -149,7 +150,7 @@ def _server_ac_toml(gateway_pub: str) -> str:
 
 def _server_relay_toml(relay_pub: str) -> str:
     return "\n".join([
-        "# Optional NHP-Relay peer. Compose DNS name relay.",
+        "# Optional NHP-Relay peer. Not a dial address for the knock.",
         "[[Relays]]",
         'Hostname = "relay"',
         f'PubKeyBase64 = "{relay_pub}"',
@@ -180,19 +181,27 @@ def _nhp_server_peer(name: str, public: str) -> list[str]:
         f"ExpireTime = {PEER_EXPIRE}",
         "",
         "  [[Servers.Instances]]",
-        f'  Host = "{name}"',
+        f'  Host = "{PEER_HOST}"',
         f"  Port = {SERVER_LISTEN_PORT}",
         "  Weight = 1",
         "",
     ]
 
 
-def _plugin_resource(config: OperatorConfig) -> str:
+def _filter_ip(public_host: str, addresses) -> str:
+    if addresses is None:
+        return ""
+    try:
+        return addresses[public_host]
+    except KeyError as exc:
+        raise ValueError(f"no filter address for {public_host}") from exc
+
+
+def _plugin_resource(config: OperatorConfig, addresses=None) -> str:
     lines = [
-        "# Client-facing resource. Addr is the public host and port.",
-        "# Backend addresses are not written here.",
-        "# Open address source: endpoints/server/udpserver.go handleNhpOpenResource",
-        "# uses info.Addr for the AC destination and DestHost() for the ACK.",
+        "# Client-facing resource. Hostname is the public name.",
+        "# Addr.Ip is the local filter address, never the backend.",
+        "# ACK name: DestHost prefers Hostname. NHP-AC opens Addr.",
         "",
     ]
     for resource in config.resources:
@@ -202,10 +211,11 @@ def _plugin_resource(config: OperatorConfig) -> str:
         lines.append("")
         for forward in resource.forwards:
             sub = f"{forward.protocol}-{forward.public_port}"
+            ip = _filter_ip(forward.public_host, addresses)
             lines.append(f'["{resource.name}".Resources."{sub}"]')
             lines.append(f'ACId = "{AC_ID}"')
             lines.append(f'Hostname = "{forward.public_host}"')
-            lines.append(f'Addr.Ip = "{forward.public_host}"')
+            lines.append(f'Addr.Ip = "{ip}"')
             lines.append(f"Addr.Port = {forward.public_port}")
             lines.append(f'Addr.Protocol = "{forward.protocol}"')
             # DestHost includes the port so the client can connect.

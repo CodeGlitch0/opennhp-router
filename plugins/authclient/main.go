@@ -15,16 +15,16 @@ import (
 	toml "github.com/pelletier/go-toml/v2"
 )
 
-// authURL is the compose DNS name of the auth service, not an operator address.
+// authURL is the auth service on the host loopback. Compose DNS names do not resolve.
 // Signatures match nhp/plugins/serverpluginhandler.go:
 //
 //	Init(*plugins.PluginParamsIn) error
 //	AuthWithNHP(*common.NhpAuthRequest, *plugins.NhpServerPluginHelper) (*common.ServerKnockAckMsg, error)
 //
-// The ACK host and the AC open address are the same upstream field
-// (endpoints/server/udpserver.go handleNhpOpenResource, info.Addr / DestHost).
-// This plugin does not put a backend address in that field.
-const authURL = "http://auth:8090/authorize"
+// Hostname (the ACK name) and Addr.Ip (the address NHP-AC opens) are
+// different upstream fields. This plugin does not put a backend address
+// in either field.
+const authURL = "http://127.0.0.1:8090/authorize"
 
 const aspID = "authclient"
 

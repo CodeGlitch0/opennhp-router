@@ -15,6 +15,7 @@ RUN make init \
     && make acd \
     && make serverd \
     && make relayd \
+    && make agentd \
     && go build -o /out/opennhp-keygen ./cmd/opennhp-keygen
 
 WORKDIR /src/authclient
@@ -45,8 +46,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=opennhp /src/opennhp/release/nhp-ac /opt/nhp-ac
 COPY docker/forwarder.py /opt/forwarder.py
-COPY docker/iptables-deny.sh /iptables-deny.sh
-RUN chmod 755 /iptables-deny.sh /opt/forwarder.py
+RUN chmod 755 /opt/forwarder.py
 
 ENTRYPOINT ["python3", "/entrypoint.py", "gateway"]
 
@@ -67,3 +67,13 @@ FROM runtime AS relay
 COPY --from=opennhp /src/opennhp/release/nhp-relay /opt/nhp-relay
 
 ENTRYPOINT ["python3", "/entrypoint.py", "relay"]
+
+FROM runtime AS agent
+
+# make agentd writes release/nhp-agent/nhp-agentd. Copy that tree, then
+# drop etc: it includes certs/server.key, which nhp-agentd run does not
+# read. config.toml is written at start from keygen. No baked private key.
+COPY --from=opennhp /src/opennhp/release/nhp-agent /opt/nhp-agent
+RUN rm -rf /opt/nhp-agent/etc
+ENV OPENNHP_BIN=/opt/nhp-agent/nhp-agentd
+ENTRYPOINT ["python3", "/entrypoint.py", "agent"]

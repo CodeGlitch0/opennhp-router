@@ -87,11 +87,37 @@ class ComposeBoundaryTest(unittest.TestCase):
             self.assertNotIn("profiles:", block)
             self.assertNotIn("relay", _depends_on(block))
 
-    def test_agent_compose_is_separate(self):
+    def test_services_use_host_network_and_do_not_publish_ports(self):
+        text = (DOCKER / "compose.yaml").read_text()
+        self.assertNotIn("ports:", text)
+        for name in ("gateway", "server", "auth", "relay"):
+            block = _service_block(text, name)
+            self.assertIn("network_mode: host", block)
+        gateway = _service_block(text, "gateway")
+        self.assertIn("NET_ADMIN", gateway)
+        self.assertIn("NET_RAW", gateway)
+        server = _service_block(text, "server")
+        self.assertIn("OPENNHP_REQUIRE_RELAY: ${OPENNHP_REQUIRE_RELAY:-}", server)
+        readme = (ROOT / "README.md").read_text()
+        self.assertIn(
+            "OPENNHP_REQUIRE_RELAY=1 docker compose -f docker/compose.yaml --profile relay up --build",
+            readme,
+        )
+        self.assertIn("docker compose -f docker/compose.yaml up --build", readme)
+
+    def test_agent_compose_builds_the_agent_target(self):
         text = (DOCKER / "compose.agent.yaml").read_text()
+        dockerfile = (DOCKER / "Dockerfile").read_text()
+        agent = _stage(dockerfile, "agent")
         self.assertIn("agent:", text)
-        self.assertIn("image: opennhp-agent", text)
-        self.assertIn("upstream agent", text.lower())
+        self.assertIn("target: agent", text)
+        self.assertNotIn("image: opennhp-agent", text)
+        self.assertEqual(dockerfile.count("git clone"), 1)
+        self.assertIn("make agentd", dockerfile)
+        self.assertIn("release/nhp-agent", agent)
+        self.assertIn("nhp-agentd", agent)
+        self.assertNotIn("git clone", agent)
+        self.assertIn("rm -rf /opt/nhp-agent/etc", agent)
 
 
 def _service_names(text):

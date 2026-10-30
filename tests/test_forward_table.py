@@ -33,7 +33,10 @@ protocol = "tcp"
 
 class ForwardTableTest(unittest.TestCase):
     def test_forward_table_maps_public_port_to_backend(self):
-        files = render(load_operator_text(OPERATOR))
+        files = render(
+            load_operator_text(OPERATOR),
+            addresses={"pub.example": "198.51.100.8"},
+        )
         table = files["gateway/etc/forwards.toml"]
         client = files["server/plugins/authclient/etc/resource.toml"]
 
@@ -45,6 +48,9 @@ class ForwardTableTest(unittest.TestCase):
         self.assertNotIn("backend.internal", client)
         self.assertNotIn("other.internal", client)
         self.assertNotIn("9443", client)
+        self.assertIn('Addr.Ip = "198.51.100.8"', client)
+        self.assertNotIn('Addr.Ip = "backend.internal"', client)
+        self.assertNotIn('Addr.Ip = "other.internal"', client)
 
 
 if __name__ == "__main__":

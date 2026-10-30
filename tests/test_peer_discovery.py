@@ -1,4 +1,4 @@
-"""Peer discovery uses compose DNS names, never operator-supplied addresses."""
+"""Peers dial 127.0.0.1. Operator addresses are not peer addresses."""
 
 import unittest
 
@@ -32,11 +32,16 @@ PEER_FILES = (
 
 
 class PeerDiscoveryTest(unittest.TestCase):
-    def test_peer_files_use_compose_dns_not_operator_addresses(self):
+    def test_peer_dial_host_is_loopback_not_an_operator_address(self):
         files = render(load_operator_text(OPERATOR))
         blob = "\n".join(files[name] for name in PEER_FILES)
-        for name in ("gateway", "server", "auth", "relay"):
-            self.assertIn(f'"{name}"', blob)
+        self.assertIn('Host = "127.0.0.1"', files["gateway/etc/server.toml"])
+        self.assertIn('Host = "127.0.0.1"', files["relay/etc/config.toml"])
+        self.assertNotIn('Host = "server"', blob)
+        self.assertNotIn('Host = "gateway"', blob)
+        self.assertNotIn('Host = "auth"', blob)
+        self.assertNotIn('Host = "relay"', blob)
+        self.assertIn("62206", blob)
         self.assertNotIn("203.0.113.10", blob)
         self.assertNotIn("10.9.8.7", blob)
         self.assertNotIn("pub.example", blob)

@@ -23,7 +23,8 @@ class AuthClientPluginTest(unittest.TestCase):
             text,
         )
         self.assertIn("*common.ServerKnockAckMsg", text)
-        self.assertIn("http://auth:8090/authorize", text)
+        self.assertIn("http://127.0.0.1:8090/authorize", text)
+        self.assertNotIn("http://auth:8090/authorize", text)
         self.assertIn("http.Post", text)
         self.assertIn('"pubkey"', text)
         self.assertIn("req.PublicKey", text)

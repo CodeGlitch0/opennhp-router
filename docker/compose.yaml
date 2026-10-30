@@ -1,5 +1,6 @@
 # Default stack: NHP-AC (gateway), NHP-Server, and the auth service.
-# Relay is optional. Start it with: docker compose --profile relay up
+# Host network: compose DNS names do not resolve. Peers dial 127.0.0.1.
+# Relay is optional. A no-relay start does not wait for it.
 # The agent is not part of this file.
 
 services:
@@ -8,8 +9,10 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: gateway
+    network_mode: host
     cap_add:
       - NET_ADMIN
+      - NET_RAW
     volumes:
       - gateway_keys:/var/lib/opennhp/gateway
       - gateway_pub:/run/publish/gateway
@@ -24,8 +27,9 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: server
-    ports:
-      - "62206:62206/udp"
+    network_mode: host
+    environment:
+      OPENNHP_REQUIRE_RELAY: ${OPENNHP_REQUIRE_RELAY:-}
     volumes:
       - server_keys:/var/lib/opennhp/server
       - server_pub:/run/publish/server
@@ -40,6 +44,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: auth
+    network_mode: host
     volumes:
       - auth_keys:/var/lib/opennhp/auth
       - ../router.toml:/etc/opennhp/router.toml:ro
@@ -51,8 +56,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
       target: relay
-    ports:
-      - "8080:8080"
+    network_mode: host
     volumes:
       - relay_keys:/var/lib/opennhp/relay
       - relay_pub:/run/publish/relay

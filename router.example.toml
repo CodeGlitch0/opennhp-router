@@ -1,5 +1,7 @@
 # Operator settings. Nothing else is required.
 # Keys and peer addresses are generated. Do not paste them here.
+# public_host must be an address on this host, or a name that resolves to one.
+# backend_host must be reachable from the host, not a compose service name.
 
 window_seconds = 60
 
