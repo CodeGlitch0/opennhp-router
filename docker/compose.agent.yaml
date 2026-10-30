@@ -1,0 +1,7 @@
+# Builds nhp-agentd from this repo. Not started by docker/compose.yaml.
+services:
+  agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      target: agent
