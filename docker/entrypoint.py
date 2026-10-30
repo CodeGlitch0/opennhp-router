@@ -14,6 +14,38 @@ from opennhp_router.operator import load_operator_path
 from opennhp_router.render import render
 
 
+_REQUIRED_PEERS = {
+    "gateway": ("server",),
+    "server": ("gateway",),
+    "relay": ("server",),
+    "auth": (),
+}
+
+
+def required_peers(role: str) -> tuple:
+    if role not in _REQUIRED_PEERS:
+        raise ValueError(f"unknown role {role}")
+    return _REQUIRED_PEERS[role]
+
+
+def wait_for_peers(peer_dir, names, timeout=None, interval=0.05) -> None:
+    import time
+
+    pending = set(names)
+    deadline = None if timeout is None else time.monotonic() + float(timeout)
+    while pending:
+        for name in list(pending):
+            pub = Path(peer_dir) / name / "public"
+            if pub.is_file() and pub.read_text().strip():
+                pending.discard(name)
+        if not pending:
+            return
+        if deadline is not None and time.monotonic() >= deadline:
+            missing = ", ".join(sorted(pending))
+            raise TimeoutError(f"missing peer public keys: {missing}")
+        time.sleep(interval)
+
+
 def prepare(
     role,
     operator_path,
@@ -24,8 +56,14 @@ def prepare(
     env,
 ):
     config = load_operator_path(operator_path)
-    pair = ensure_keypair(key_path(role, key_root), regenerate_requested(env))
+    pair = ensure_keypair(
+        key_path(role, key_root),
+        regenerate_requested(env),
+        keygen=env.get("OPENNHP_KEYGEN"),
+    )
     _publish(publish_dir, pair.public)
+    timeout = env.get("OPENNHP_PEER_TIMEOUT")
+    wait_for_peers(peer_dir, required_peers(role), timeout=timeout)
     files = render(config, _peer_keys(role, pair, peer_dir))
     _write_role(role, etc_dir, files)
     return pair
@@ -84,6 +122,8 @@ def main(argv=None) -> int:
     if role not in _ETC:
         print("usage: entrypoint.py <gateway|server|auth|relay>", file=sys.stderr)
         return 2
+    if "OPENNHP_KEYGEN" not in os.environ:
+        os.environ["OPENNHP_KEYGEN"] = "/opt/opennhp-keygen"
     etc = Path(os.environ.get("OPENNHP_ETC", _ETC[role]))
     prepare(
         role,

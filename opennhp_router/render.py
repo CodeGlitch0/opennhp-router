@@ -130,16 +130,7 @@ def _peer_files(keys) -> dict[str, str]:
 def _ac_server_toml(server_pub: str) -> str:
     return "\n".join([
         "# NHP-AC upstream server. Compose DNS name, not an operator address.",
-        "[[Servers]]",
-        'Name = "server"',
-        f'PubKeyBase64 = "{server_pub}"',
-        f"ExpireTime = {PEER_EXPIRE}",
-        "",
-        "  [[Servers.Instances]]",
-        '  Host = "server"',
-        f"  Port = {SERVER_LISTEN_PORT}",
-        "  Weight = 1",
-        "",
+        *_nhp_server_peer("server", server_pub),
     ])
 
 
@@ -177,17 +168,23 @@ def _relay_config_toml(server_pub: str, private: str = "") -> str:
         "keepaliveIntervalS = 20",
         "logLevel = 2",
         "",
+        *_nhp_server_peer("server", server_pub),
+    ])
+
+
+def _nhp_server_peer(name: str, public: str) -> list[str]:
+    return [
         "[[Servers]]",
-        'Name = "server"',
-        f'PubKeyBase64 = "{server_pub}"',
+        f'Name = "{name}"',
+        f'PubKeyBase64 = "{public}"',
         f"ExpireTime = {PEER_EXPIRE}",
         "",
         "  [[Servers.Instances]]",
-        '  Host = "server"',
+        f'  Host = "{name}"',
         f"  Port = {SERVER_LISTEN_PORT}",
         "  Weight = 1",
         "",
-    ])
+    ]
 
 
 def _plugin_resource(config: OperatorConfig) -> str:

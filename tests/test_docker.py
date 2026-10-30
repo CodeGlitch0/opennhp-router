@@ -17,38 +17,54 @@ def _copy_lines(text):
     return lines
 
 
+def _stage(text, name):
+    lines = text.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        if line.startswith("FROM ") and line.rstrip().endswith(f"AS {name}"):
+            start = i
+            break
+    if start is None:
+        return ""
+    block = [lines[start]]
+    for line in lines[start + 1:]:
+        if line.startswith("FROM "):
+            break
+        block.append(line)
+    return "\n".join(block)
+
+
 class DockerfileBoundaryTest(unittest.TestCase):
-    def test_gateway_does_not_copy_server_or_auth_code(self):
-        text = (DOCKER / "Dockerfile.gateway").read_text()
+    def test_one_clone_and_one_pin(self):
+        text = (DOCKER / "Dockerfile").read_text()
+        self.assertEqual(text.count("git clone"), 1)
+        self.assertEqual(text.count("0115f5ff"), 1)
+        self.assertIn("opennhp-keygen", text)
+
+    def test_gateway_stage_does_not_copy_server_or_auth_code(self):
+        text = _stage((DOCKER / "Dockerfile").read_text(), "gateway")
         copies = "\n".join(_copy_lines(text)).lower()
         self.assertNotIn("plugins/authclient", copies)
-        self.assertNotIn("endpoints/server", copies)
-        self.assertNotIn("dockerfile.server", copies)
-        self.assertNotIn("dockerfile.auth", copies)
+        self.assertNotIn("authclient", copies)
         self.assertNotIn("nhp-server", copies)
-        for line in _copy_lines(text):
-            low = line.lower()
-            self.assertNotIn("/auth", low)
-            self.assertNotIn("authclient", low)
-        self.assertIn("0115f5ff", text)
-        self.assertIn("acd", text)
-        self.assertNotIn("serverd", text)
+        self.assertIn("nhp-ac", text)
+        self.assertNotIn("nhp-serverd", text)
 
-    def test_server_image_is_not_the_auth_service(self):
-        server = (DOCKER / "Dockerfile.server").read_text()
-        auth = (DOCKER / "Dockerfile.auth").read_text()
+    def test_server_stage_is_not_the_auth_service(self):
+        dockerfile = (DOCKER / "Dockerfile").read_text()
+        server = _stage(dockerfile, "server")
+        auth = _stage(dockerfile, "auth")
         self.assertNotEqual(server, auth)
-        self.assertIn("nhp-serverd", server)
-        self.assertNotIn("nhp-serverd", auth)
+        self.assertIn("nhp-server", server)
+        self.assertIn("authclient", server)
+        self.assertNotIn("nhp-server", auth)
         self.assertIn("8090", auth)
         self.assertNotIn("8090", server)
-        self.assertIn("0115f5ff", server)
-        self.assertIn("authclient", server)
 
-    def test_relay_pins_the_same_commit(self):
-        text = (DOCKER / "Dockerfile.relay").read_text()
-        self.assertIn("0115f5ff", text)
-        self.assertIn("relayd", text)
+    def test_relay_stage_uses_the_shared_pin(self):
+        text = _stage((DOCKER / "Dockerfile").read_text(), "relay")
+        self.assertIn("nhp-relay", text)
+        self.assertNotIn("git clone", text)
 
 
 class ComposeBoundaryTest(unittest.TestCase):

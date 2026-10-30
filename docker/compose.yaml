@@ -6,7 +6,8 @@ services:
   gateway:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.gateway
+      dockerfile: docker/Dockerfile
+      target: gateway
     cap_add:
       - NET_ADMIN
     volumes:
@@ -21,7 +22,8 @@ services:
   server:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.server
+      dockerfile: docker/Dockerfile
+      target: server
     ports:
       - "62206:62206/udp"
     volumes:
@@ -36,7 +38,8 @@ services:
   auth:
     build:
       context: ..
-      dockerfile: docker/Dockerfile.auth
+      dockerfile: docker/Dockerfile
+      target: auth
     volumes:
       - auth_keys:/var/lib/opennhp/auth
       - ../router.toml:/etc/opennhp/router.toml:ro
@@ -46,7 +49,8 @@ services:
       - relay
     build:
       context: ..
-      dockerfile: docker/Dockerfile.relay
+      dockerfile: docker/Dockerfile
+      target: relay
     ports:
       - "8080:8080"
     volumes:
